@@ -1,12 +1,20 @@
-const fs = require('fs');
+const fs = require("fs");
 
 const { validationResult } = require("express-validator");
 const mongoose = require("mongoose");
+const cloudinary = require("cloudinary");
 
 const HttpError = require("../models/http-error");
 const getCoordsForAddress = require("../util/location");
 const Place = require("../models/place");
 const User = require("../models/user");
+
+//Cloudinary setup
+cloudinary.config({
+  cloud_name: "dlvl0f54m",
+  api_key: "768514378192972",
+  api_secret: "_jGJpN0AYnQbRi6KQrx8jihzssY"
+});
 
 const getPlaceById = async (req, res, next) => {
   const placeId = req.params.pid;
@@ -87,59 +95,74 @@ const createPlace = async (req, res, next) => {
     );
   }
 
-  const { title, description, address } = req.body;
-
-  let coordinates;
+  let imageUrl;
   try {
-    coordinates = await getCoordsForAddress(address);
-  } catch (error) {
-    return next(error);
-  }
+    cloudinary.v2.uploader.upload(req.file.path, async (error, result) => {
+      console.log(result, error);
+      imageUrl = result.secure_url;
 
-  // const title = req.body.title;
-  const createdPlace = new Place({
-    title,
-    description,
-    address,
-    location: coordinates,
-    image: req.file.path,
-    creator: req.userData.userId
-  });
+      const { title, description, address } = req.body;
 
-  let user;
-  try {
-    user = await User.findById(req.userData.userId);
+      let coordinates;
+      try {
+        coordinates = await getCoordsForAddress(address);
+      } catch (error) {
+        return next(error);
+      }
+
+      // const title = req.body.title;
+      const createdPlace = new Place({
+        title,
+        description,
+        address,
+        location: coordinates,
+        // image: req.file.path,
+        image: imageUrl,
+        creator: req.userData.userId
+      });
+
+      let user;
+      try {
+        user = await User.findById(req.userData.userId);
+      } catch (err) {
+        const error = new HttpError(
+          "Creating place failed, please try again.",
+          500
+        );
+        return next(error);
+      }
+
+      if (!user) {
+        const error = new HttpError("Could not find user for provided id", 404);
+        return next(error);
+      }
+
+      console.log(user);
+
+      try {
+        const sess = await mongoose.startSession();
+        sess.startTransaction();
+        await createdPlace.save({ session: sess });
+        user.places.push(createdPlace);
+        await user.save({ session: sess });
+        await sess.commitTransaction();
+      } catch (err) {
+        const error = new HttpError(
+          "Creating place failed, please try again.",
+          500
+        );
+        return next(error);
+      }
+
+      res.status(201).json({ place: createdPlace });
+    });
   } catch (err) {
     const error = new HttpError(
-      "Creating place failed, please try again.",
+      "Could not upload image, please try again.",
       500
     );
     return next(error);
   }
-
-  if (!user) {
-    const error = new HttpError("Could not find user for provided id", 404);
-    return next(error);
-  }
-
-  console.log(user);
-
-  try {
-    const sess = await mongoose.startSession();
-    sess.startTransaction();
-    await createdPlace.save({ session: sess });
-    user.places.push(createdPlace);
-    await user.save({ session: sess });
-    await sess.commitTransaction();
-  } catch (err) {
-    const error = new HttpError(
-      "Creating place failed, please try again.",
-      500
-    );
-    return next(error);
-  }
-
-  res.status(201).json({ place: createdPlace });
 };
 
 const updatePlace = async (req, res, next) => {
@@ -165,10 +188,7 @@ const updatePlace = async (req, res, next) => {
   }
 
   if (place.creator.toString() !== req.userData.userId) {
-    const error = new HttpError(
-      "You are not allowed to edit this place.",
-      401
-    );
+    const error = new HttpError("You are not allowed to edit this place.", 401);
     return next(error);
   }
 
@@ -215,7 +235,7 @@ const deletePlace = async (req, res, next) => {
     return next(error);
   }
 
-  const imagePath = place.image;
+  // const imagePath = place.image;
 
   try {
     const sess = await mongoose.startSession();
@@ -232,10 +252,10 @@ const deletePlace = async (req, res, next) => {
     return next(error);
   }
 
-  fs.unlink(imagePath, err => {
-    console.log(err);
-  });
-  
+  // fs.unlink(imagePath, err => {
+  //   console.log(err);
+  // });
+
   res.status(200).json({ message: "Deleted place." });
 };
 

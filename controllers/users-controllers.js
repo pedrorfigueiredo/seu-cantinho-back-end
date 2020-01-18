@@ -1,9 +1,17 @@
 const { validationResult } = require("express-validator");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const cloudinary = require("cloudinary");
 
 const HttpError = require("../models/http-error");
 const User = require("../models/user");
+
+//Cloudinary setup
+cloudinary.config({
+  cloud_name: "dlvl0f54m",
+  api_key: "768514378192972",
+  api_secret: "_jGJpN0AYnQbRi6KQrx8jihzssY"
+});
 
 const getUsers = async (req, res, next) => {
   let users;
@@ -58,36 +66,58 @@ const signup = async (req, res, next) => {
     return next(error);
   }
 
-  const createdUser = new User({
-    name,
-    email,
-    image: req.file.path,
-    password: hashedPassword,
-    places: []
-  });
-
+  let imageUrl;
   try {
-    await createdUser.save();
-  } catch (err) {
-    const error = new HttpError("Signing up failed, please try again.", 500);
-    return next(error);
-  }
+    cloudinary.v2.uploader.upload(
+      req.file.path,
+      async (error, result) => {
+        console.log(result, error);
+        imageUrl = result.secure_url;
 
-  let token;
-  try {
-    token = jwt.sign(
-      { userId: createdUser.id, email: createdUser.email },
-      process.env.JWT_KEY,
-      { expiresIn: "1h" }
+        const createdUser = new User({
+          name,
+          email,
+          // image: req.file.path,
+          image: imageUrl,
+          password: hashedPassword,
+          places: []
+        });
+      
+        try {
+          await createdUser.save();
+        } catch (err) {
+          const error = new HttpError("Signing up failed, please try again.", 500);
+          return next(error);
+        }
+      
+        let token;
+        try {
+          token = jwt.sign(
+            { userId: createdUser.id, email: createdUser.email },
+            process.env.JWT_KEY,
+            { expiresIn: "1h" }
+          );
+        } catch (err) {
+          const error = new HttpError(
+            "Signing up failed, please try again later.",
+            500
+          );
+          return next(error);
+        }
+      
+        res
+          .status(201)
+          .json({ userId: createdUser.id, email: createdUser.email, token: token });
+      }
     );
   } catch (err) {
-    const error = new HttpError("Signing up failed, please try again later.", 500);
+    const error = new HttpError(
+      "Could not upload image, please try again.",
+      500
+    );
     return next(error);
   }
 
-  res
-    .status(201)
-    .json({ userId: createdUser.id, email: createdUser.email, token: token });
 };
 
 const login = async (req, res, next) => {
