@@ -8,9 +8,9 @@ const User = require("../models/user");
 
 //Cloudinary setup
 cloudinary.config({
-  cloud_name: "dlvl0f54m",
-  api_key: "768514378192972",
-  api_secret: "_jGJpN0AYnQbRi6KQrx8jihzssY"
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUD_KEY,
+  api_secret: process.env.CLOUD_SECRET
 });
 
 const getUsers = async (req, res, next) => {
