@@ -24,4 +24,4 @@ npm install
 npm start
 ```
 
-Now your "Seu Cantinho - Front-end" is running at http://localhost:5000
+Now your "Seu Cantinho - Back-end" is running at http://localhost:5000
