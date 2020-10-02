@@ -18,11 +18,11 @@ Front-end: [Link](https://github.com/pedrorfigueiredo/seu-cantinho-front-end)
 
 ## Install
 
-You'll need to configure your environment variables for MongoDB database, JWT and Cloudinary file server.
-
 ```sh
 npm install
 ```
+
+You'll need to configure your environment variables for MongoDB database, JWT and Cloudinary file server.
 
 ## Running
 
